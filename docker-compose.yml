@@ -1,0 +1,46 @@
+services:
+  backend:
+    build: .
+    container_name: ai-price-backend
+    restart: unless-stopped
+    environment:
+      - FLASK_DEBUG=0
+    ports:
+      - "5000:5000"          # API ประเมินราคา/เกรด: http://localhost:5000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile.chatbot
+    container_name: ai-chatbot
+    restart: unless-stopped
+    environment:
+      - FLASK_DEBUG=0
+    ports:
+      - "5001:5001"          # API แชทบอทถาม-ตอบ: http://localhost:5001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    image: nginx:alpine
+    container_name: ai-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"            # หน้าเว็บทั้งหมด: http://localhost:8080
+    volumes:
+      - ./mockup_ai_price.html:/usr/share/nginx/html/mockup_ai_price.html:ro
+      - ./negotiation_chatbot.html:/usr/share/nginx/html/negotiation_chatbot.html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - chatbot

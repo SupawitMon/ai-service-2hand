@@ -1,0 +1,18 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# ผลเทรนและ dataset (ใหญ่ ไม่ต้องขึ้น GitHub)
+runs/
+grade_dataset_v3/
+
+# โมเดลตั้งต้นที่ ultralytics โหลดเองได้
+yolo26n.pt
+yolov8n-cls.pt
+
+# อื่นๆ
+*.mp4
+_tmp_upload.jpg
+.env

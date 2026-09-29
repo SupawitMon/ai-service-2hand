@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI ประเมินราคาสินค้ามือสอง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --mint-0:#EAF6F3;
+    --mint-1:#D5EDE7;
+    --mint-2:#B2ECDD;
+    --mint-3:#6EE7C8;
+    --green-btn:#16A34A;
+    --green-btn-hover:#12833B;
+    --ink:#1F2937;
+    --ink-soft:#4B5563;
+    --ink-mute:#9CA3AF;
+    --card:#FFFFFF;
+    --border:#E5E7EB;
+    --danger:#DC2626;
+    --radius-lg:20px;
+    --radius-md:14px;
+    --radius-sm:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Noto Sans Thai', sans-serif;
+    background:linear-gradient(160deg, var(--mint-0) 0%, var(--mint-1) 55%, var(--mint-0) 100%);
+    color:var(--ink);
+    min-height:100vh;
+    padding:32px 16px 64px;
+  }
+  .wrap{max-width:1040px;margin:0 auto;}
+  header{text-align:center;margin-bottom:28px;}
+  header .eyebrow{
+    font-size:13px;font-weight:600;color:#0F6E56;letter-spacing:.04em;
+    text-transform:uppercase;margin-bottom:6px;
+  }
+  header h1{font-size:26px;font-weight:700;margin:0 0 6px;}
+  header p{font-size:14px;color:var(--ink-soft);margin:0;}
+
+  .steps{
+    display:flex;justify-content:center;gap:6px;margin:22px auto 30px;
+    max-width:640px;flex-wrap:wrap;
+  }
+  .step-pill{
+    display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+    color:var(--ink-mute);padding:6px 12px;border-radius:999px;background:#fff;
+    border:1px solid var(--border);transition:all .25s ease;
+  }
+  .step-pill.active{color:#0F6E56;background:var(--mint-2);border-color:transparent;}
+  .step-pill .num{
+    width:16px;height:16px;border-radius:50%;background:var(--ink-mute);color:#fff;
+    font-size:10px;display:flex;align-items:center;justify-content:center;
+  }
+  .step-pill.active .num{background:#0F6E56;}
+
+  .grid{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;align-items:start;}
+  @media (max-width:820px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--card);border-radius:var(--radius-lg);
+    padding:26px 26px 28px;border:1px solid var(--border);
+  }
+  .card h2{font-size:17px;font-weight:700;margin:0 0 4px;}
+  .card .sub{font-size:13px;color:var(--ink-soft);margin:0 0 18px;}
+
+  .dropzone{
+    border:2px dashed #B7DED3;border-radius:var(--radius-md);
+    background:var(--mint-0);padding:22px;text-align:center;cursor:pointer;
+    transition:border-color .2s ease, background .2s ease;
+  }
+  .dropzone:hover{border-color:var(--mint-3);background:#E3F7F0;}
+  .dropzone.has-files{padding:16px;}
+  .dropzone input{display:none;}
+  .dz-icon{font-size:26px;margin-bottom:6px;}
+  .dz-text{font-size:14px;font-weight:600;color:#0F6E56;margin:0 0 2px;}
+  .dz-sub{font-size:12px;color:var(--ink-mute);margin:0;}
+
+  .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .thumb{
+    width:64px;height:64px;border-radius:10px;background:#DDEFE9;
+    display:flex;align-items:center;justify-content:center;font-size:11px;
+    color:#0F6E56;font-weight:600;position:relative;overflow:hidden;
+    border:1px solid #C9E7DD;
+  }
+  .thumb .x{
+    position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;
+    background:rgba(0,0,0,.45);color:#fff;font-size:10px;display:flex;
+    align-items:center;justify-content:center;cursor:pointer;line-height:1;
+  }
+
+  .ai-detect{
+    margin-top:14px;border-radius:var(--radius-md);padding:14px 16px;
+    display:none;align-items:center;gap:12px;background:#F3FBF8;border:1px solid var(--mint-2);
+  }
+  .ai-detect.show{display:flex;}
+  .ai-detect .spin{
+    width:18px;height:18px;border-radius:50%;border:2px solid #BFE9DB;
+    border-top-color:#0F6E56;animation:spin .8s linear infinite;flex-shrink:0;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .ai-detect .txt{font-size:13px;color:#0F6E56;font-weight:500;}
+  .ai-detect .grade-badge{
+    margin-left:auto;font-size:13px;font-weight:700;padding:4px 12px;
+    border-radius:999px;background:var(--mint-3);color:#04342C;display:none;
+  }
+  .ai-detect .grade-badge.show{display:inline-block;}
+
+  .field{margin-top:16px;}
+  .field label{
+    display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px;
+  }
+  .field .req{color:var(--danger);}
+  .field input, .field select, .field textarea{
+    width:100%;padding:10px 12px;border-radius:var(--radius-sm);
+    border:1px solid var(--border);font-family:inherit;font-size:14px;color:var(--ink);
+    background:#fff;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline:none;border-color:var(--mint-3);box-shadow:0 0 0 3px rgba(110,231,200,.25);
+  }
+  .field textarea{resize:vertical;min-height:56px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .err{font-size:12px;color:var(--danger);margin-top:5px;display:none;}
+  .err.show{display:block;}
+
+  .submit-btn{
+    margin-top:22px;width:100%;padding:13px;border:none;border-radius:var(--radius-sm);
+    background:var(--green-btn);color:#fff;font-size:15px;font-weight:700;
+    font-family:inherit;cursor:pointer;transition:background .2s ease;
+  }
+  .submit-btn:hover{background:var(--green-btn-hover);}
+  .submit-btn:disabled{background:#B9C4C0;cursor:not-allowed;}
+
+  .result-card{
+    background:linear-gradient(180deg, var(--mint-2) 0%, #EAF9F4 42%);
+    border-radius:var(--radius-lg);padding:26px;border:1px solid var(--mint-2);
+    min-height:100%;
+  }
+  .result-empty{text-align:center;padding:40px 10px;color:#3E7863;}
+  .result-empty .ic{font-size:34px;margin-bottom:10px;}
+  .result-empty p{font-size:13px;margin:0;line-height:1.6;}
+
+  .result-body{display:none;}
+  .result-body.show{display:block;}
+  .result-title{font-size:14px;font-weight:600;color:#0F6E56;margin:0 0 2px;}
+  .result-sub{font-size:12px;color:#3E7863;margin:0 0 14px;}
+  .price-range{font-size:30px;font-weight:700;color:#053B2E;line-height:1.2;}
+  .price-mid-pill{
+    display:inline-block;margin-top:10px;font-size:12px;font-weight:700;
+    background:#0F6E56;color:#fff;padding:5px 14px;border-radius:999px;
+  }
+  .price-confidence-pill{
+    display:inline-block;margin-top:10px;margin-left:6px;font-size:12px;font-weight:700;
+    background:#fff;color:#0F6E56;padding:5px 14px;border-radius:999px;border:1px solid #0F6E56;
+  }
+
+  .insight-box{
+    margin-top:20px;background:#fff;border-radius:var(--radius-md);
+    padding:16px 18px;border:1px solid var(--mint-2);
+  }
+  .insight-box ul{margin:0;padding-left:18px;}
+  .insight-box li{font-size:13px;color:var(--ink-soft);margin-bottom:7px;line-height:1.5;}
+  .insight-box li:last-child{margin-bottom:0;}
+  .insight-box li b{color:var(--ink);font-weight:700;}
+
+  .factor-box{margin-top:16px;}
+  .factor-box h3{font-size:12px;font-weight:700;color:#0F6E56;margin:0 0 10px;text-transform:uppercase;letter-spacing:.03em;}
+  .factor-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+  .factor-row .flabel{font-size:12px;width:118px;flex-shrink:0;color:var(--ink-soft);}
+  .factor-row .fbar-track{flex:1;height:8px;border-radius:999px;background:#DCEFE8;overflow:hidden;}
+  .factor-row .fbar-fill{height:100%;border-radius:999px;background:#0F6E56;}
+  .factor-row .fimpact{font-size:11px;width:64px;text-align:right;flex-shrink:0;font-weight:600;}
+  .factor-row .fimpact.up{color:#0F6E56;}
+  .factor-row .fimpact.down{color:#B42318;}
+  .factor-row .fpct{font-size:11px;color:var(--ink-mute);width:34px;text-align:right;flex-shrink:0;}
+
+  .foot-note{font-size:11px;color:#3E7863;margin-top:16px;text-align:center;opacity:.8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">AI Product Pricing</div>
+    <h1>AI ประเมินราคาสินค้ามือสอง</h1>
+    <p>อัปโหลดรูป กรอกข้อมูลรุ่น ให้ระบบช่วยประเมินราคาขายที่เหมาะสม</p>
+  </header>
+
+  <div class="steps">
+    <div class="step-pill active" id="pill-1"><span class="num">1</span>อัปโหลดรูป + ข้อมูล</div>
+    <div class="step-pill" id="pill-2"><span class="num">2</span>AI ตรวจสภาพ</div>
+    <div class="step-pill" id="pill-3"><span class="num">3</span>ประเมินราคา</div>
+    <div class="step-pill" id="pill-4"><span class="num">4</span>ผลลัพธ์</div>
+  </div>
+
+  <div class="grid">
+
+    <div class="card">
+      <h2>ประเมินราคาสินค้าตามสภาพ</h2>
+      <p class="sub">ถ่ายรูปสินค้าหลายมุม แล้วกรอกรายละเอียดให้ครบ</p>
+
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/*" multiple>
+        <div id="dzEmpty">
+          <div class="dz-icon">📷</div>
+          <p class="dz-text">อัปโหลดรูปสินค้า</p>
+          <p class="dz-sub">คลิกหรือลากรูปมาวาง (แนะนำ 3-5 มุม)</p>
+        </div>
+        <div id="thumbs" class="thumbs"></div>
+      </div>
+
+      <div class="ai-detect" id="aiDetect">
+        <div class="spin" id="aiSpin"></div>
+        <div class="txt" id="aiText">AI กำลังวิเคราะห์สภาพจากรูป...</div>
+        <div class="grade-badge" id="gradeBadge">เกรด A</div>
+      </div>
+
+      <div class="field">
+        <label>ยี่ห้อสินค้า</label>
+        <input type="text" id="brandInput" list="brandList" autocomplete="off" placeholder="เช่น Apple, Samsung">
+        <datalist id="brandList"></datalist>
+        <div class="err" id="errModel">กรุณากรอกยี่ห้อและรุ่นสินค้า</div>
+      </div>
+
+      <div class="field">
+        <label>รุ่นสินค้า</label>
+        <input type="text" id="modelInput" list="modelList" autocomplete="off" placeholder="เช่น iPhone 13">
+        <datalist id="modelList"></datalist>
+      </div>
+
+      <div class="field">
+        <label>เกรดสภาพ</label>
+        <select id="grade">
+          <option value="">รอผล AI ตรวจสภาพ...</option>
+          <option value="A">A — สภาพดีมาก (90-100%)</option>
+          <option value="B">B — สภาพดี (70-89%)</option>
+          <option value="C">C — สภาพพอใช้ (ต่ำกว่า 70%)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>อุปกรณ์ครบครัน</label>
+        <select id="accessories">
+          <option value="full">ครบกล่อง + อุปกรณ์ทุกชิ้น</option>
+          <option value="partial">มีบางส่วน</option>
+          <option value="none">ไม่มีกล่อง/อุปกรณ์</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>หมายเหตุเพิ่มเติม</label>
+        <textarea id="notes" placeholder="เช่น มีรอยขีดข่วนเล็กน้อยที่มุมเครื่อง"></textarea>
+      </div>
+
+      <button class="submit-btn" id="submitBtn">ประเมินราคาเลย</button>
+    </div>
+
+    <div class="result-card">
+      <div class="result-empty" id="resultEmpty">
+        <div class="ic">💰</div>
+        <p>กรอกข้อมูลสินค้าด้านซ้าย<br>แล้วกดปุ่ม "ประเมินราคาเลย"<br>เพื่อดูช่วงราคาที่แนะนำ</p>
+      </div>
+
+      <div class="result-body" id="resultBody">
+        <div class="result-title">ผลการประเมิน</div>
+        <div class="result-sub">ช่วงราคาที่แนะนำ</div>
+        <div class="price-range" id="priceRange">-</div>
+        <div class="price-mid-pill" id="priceMid">-</div>
+        <div class="price-confidence-pill" id="priceConfidence">-</div>
+
+        <div class="insight-box">
+          <ul id="insightList"></ul>
+        </div>
+
+        <div class="factor-box">
+          <h3>ปัจจัยที่มีผลต่อราคามากที่สุด</h3>
+          <div id="factorList"></div>
+          <div style="font-size:11px;color:var(--ink-mute);margin-top:4px;">ตัวเลข +/− คือจำนวนบาทที่ปัจจัยนั้นดันราคาขึ้นหรือลง เทียบกับราคาเฉลี่ยของสินค้าทั้งหมดในระบบ</div>
+        </div>
+      </div>
+
+      <div class="foot-note">ราคาประเมินโดย AI จากข้อมูลตลาดย้อนหลัง ใช้ประกอบการตัดสินใจ</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// เปิดไฟล์ตรงๆ (ดับเบิลคลิก) -> เรียก backend ที่ localhost:5000
+// เปิดผ่าน Docker (http://.../) -> nginx ส่งต่อ /api ไปให้ backend เอง จึงใช้ path เดียวกับหน้าเว็บ
+const API_BASE = location.protocol === 'file:' ? 'http://localhost:5000' : '';
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const dzEmpty = document.getElementById('dzEmpty');
+const thumbsEl = document.getElementById('thumbs');
+const aiDetect = document.getElementById('aiDetect');
+const aiSpin = document.getElementById('aiSpin');
+const aiText = document.getElementById('aiText');
+const gradeBadge = document.getElementById('gradeBadge');
+const gradeSelect = document.getElementById('grade');
+const pill2 = document.getElementById('pill-2');
+const brandInput = document.getElementById('brandInput');
+const modelInput = document.getElementById('modelInput');
+let uploadedFiles = [];
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.style.background = '#E3F7F0'; });
+dropzone.addEventListener('dragleave', () => { dropzone.style.background = ''; });
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.style.background = '';
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(fileList){
+  const files = Array.from(fileList).slice(0, 6 - uploadedFiles.length);
+  if(files.length === 0) return;
+  files.forEach(f => uploadedFiles.push(f));
+  renderThumbs();
+  runAiDetection(files[0]);
+}
+
+function renderThumbs(){
+  dzEmpty.style.display = uploadedFiles.length ? 'none' : 'block';
+  dropzone.classList.toggle('has-files', uploadedFiles.length > 0);
+  thumbsEl.innerHTML = '';
+  uploadedFiles.forEach((f, idx) => {
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.textContent = 'รูป ' + (idx + 1);
+    const url = URL.createObjectURL(f);
+    div.style.backgroundImage = 'url(' + url + ')';
+    div.style.backgroundSize = 'cover';
+    div.style.backgroundPosition = 'center';
+    div.style.color = 'transparent';
+    const x = document.createElement('div');
+    x.className = 'x';
+    x.textContent = '×';
+    x.onclick = (ev) => { ev.stopPropagation(); uploadedFiles.splice(idx,1); renderThumbs(); };
+    div.appendChild(x);
+    thumbsEl.appendChild(div);
+  });
+}
+
+function runAiDetection(imageFile){
+  aiDetect.classList.add('show');
+  aiSpin.style.display = 'block';
+  aiText.textContent = 'AI กำลังวิเคราะห์สภาพจากรูป...';
+  gradeBadge.classList.remove('show');
+  pill2.classList.add('active');
+
+  const formData = new FormData();
+  formData.append('image', imageFile);
+
+  fetch(API_BASE + '/api/predict-grade', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+      aiSpin.style.display = 'none';
+      if(data.error){
+        aiText.textContent = 'ตรวจสภาพอัตโนมัติไม่ได้ (' + data.error + ') — เลือกเกรดเองด้านล่าง';
+        return;
+      }
+      aiText.textContent = 'ตรวจพบสภาพสินค้าจากรูปแล้ว (ความมั่นใจ ' + Math.round(data.confidence*100) + '%)';
+      gradeBadge.textContent = 'เกรด ' + data.grade;
+      gradeBadge.classList.add('show');
+      gradeSelect.value = data.grade;
+    })
+    .catch(() => {
+      aiSpin.style.display = 'none';
+      aiText.textContent = 'เชื่อมต่อ backend ไม่ได้ — เลือกเกรดเองด้านล่าง';
+    });
+}
+
+const errModel = document.getElementById('errModel');
+const submitBtn = document.getElementById('submitBtn');
+const resultEmpty = document.getElementById('resultEmpty');
+const resultBody = document.getElementById('resultBody');
+const priceRange = document.getElementById('priceRange');
+const priceMid = document.getElementById('priceMid');
+const priceConfidenceEl = document.getElementById('priceConfidence');
+const insightList = document.getElementById('insightList');
+const factorList = document.getElementById('factorList');
+const pill3 = document.getElementById('pill-3');
+const pill4 = document.getElementById('pill-4');
+
+// ---- รายชื่อยี่ห้อ/รุ่นจาก backend (GET /api/options) ไว้ให้เลือกตอนพิมพ์ ----
+let BRAND_MODELS = {};
+const brandList = document.getElementById('brandList');
+const modelList = document.getElementById('modelList');
+function fillList(el, items){
+  el.innerHTML = '';
+  items.forEach(v => { const o = document.createElement('option'); o.value = v; el.appendChild(o); });
+}
+function refreshModelList(){
+  const key = Object.keys(BRAND_MODELS).find(b => b.toLowerCase() === brandInput.value.trim().toLowerCase());
+  fillList(modelList, key ? BRAND_MODELS[key] : Object.values(BRAND_MODELS).flat());
+}
+fetch(API_BASE + '/api/options')
+  .then(r => r.json())
+  .then(data => { BRAND_MODELS = data.brand_models || {}; fillList(brandList, data.brands || []); refreshModelList(); })
+  .catch(() => {});
+brandInput.addEventListener('input', refreshModelList);
+
+brandInput.addEventListener('input', () => { if(brandInput.value) errModel.classList.remove('show'); });
+modelInput.addEventListener('input', () => { if(modelInput.value) errModel.classList.remove('show'); });
+
+function clearResult(){
+  resultBody.classList.remove('show');
+  resultEmpty.style.display = 'block';
+  pill3.classList.remove('active');
+  pill4.classList.remove('active');
+}
+
+submitBtn.addEventListener('click', () => {
+  let valid = true;
+  if(!brandInput.value.trim() || !modelInput.value.trim()){ errModel.classList.add('show'); valid = false; }
+  if(!valid) return;
+
+  clearResult(); // เคลียร์ผลลัพธ์เก่าทิ้งก่อนเสมอ กันโชว์ค้างตอน error/ค้นหาสินค้าใหม่
+  pill3.classList.add('active');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'กำลังประเมินราคา...';
+
+  const payload = {
+    brand: brandInput.value.trim(),
+    model: modelInput.value.trim(),
+    grade: gradeSelect.value || 'B',
+    accessories: document.getElementById('accessories').value,
+  };
+
+  fetch(API_BASE + '/api/predict-price', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(r => r.json())
+    .then(data => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'ประเมินราคาเลย';
+      if(data.error){
+        errModel.textContent = data.error;
+        errModel.classList.add('show');
+        clearResult(); // เผื่อ error เกิดหลังจากเคย submit สำเร็จมาก่อน
+        return;
+      }
+      renderResult(data, payload);
+    })
+    .catch(() => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'ประเมินราคาเลย';
+      errModel.textContent = 'เชื่อมต่อ backend ไม่ได้ (เช็คว่ารัน backend_server.py แล้วหรือยัง)';
+      errModel.classList.add('show');
+      clearResult();
+    });
+});
+
+function renderResult(data, payload){
+  priceRange.textContent = data.recommended_min.toLocaleString() + '฿ - ' + data.recommended_max.toLocaleString() + '฿';
+  priceMid.textContent = 'ราคากลางแนะนำ ' + data.expected_price.toLocaleString() + '฿';
+  priceConfidenceEl.textContent = 'ความมั่นใจของราคา ' + Math.round((data.price_confidence || 0) * 100) + '%';
+
+  insightList.innerHTML = '';
+  const ref = data.reference || {};
+  const productName = data.product ? (data.product.brand + ' ' + data.product.model) : (payload.brand + ' ' + payload.model);
+  const insights = [
+    'อ้างอิงราคาตลาดเฉลี่ยของ <b>' + productName + '</b> ที่ <b>' + Math.round(ref.market_average_price||0).toLocaleString() + '฿</b>',
+    'ราคาที่เคยขายได้จริงเฉลี่ยอยู่ที่ <b>' + Math.round(ref.historical_sold_price||0).toLocaleString() + '฿</b>',
+    payload.accessories === 'full'
+      ? 'อุปกรณ์ครบกล่องช่วยเพิ่มมูลค่าสินค้า'
+      : 'อุปกรณ์ไม่ครบอาจทำให้มูลค่าสินค้าลดลงจากราคาปกติ',
+    data.condition_note || ''
+  ].filter(Boolean);
+  insights.forEach(t => {
+    const li = document.createElement('li');
+    li.innerHTML = t;
+    insightList.appendChild(li);
+  });
+
+  // ค่าจริงจากโมเดล XGBoost (backend คำนวณให้) — เปลี่ยนตามสินค้า/เกรด/อุปกรณ์
+  const factors = data.factors || [];
+  factorList.innerHTML = '';
+  factors.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'factor-row';
+    row.innerHTML =
+      '<div class="flabel">' + f.label + '</div>' +
+      '<div class="fbar-track"><div class="fbar-fill" style="width:' + f.pct + '%"></div></div>' +
+      '<div class="fpct">' + f.pct + '%</div>' +
+      '<div class="fimpact ' + (f.impact >= 0 ? 'up' : 'down') + '">' + (f.impact >= 0 ? '+' : '−') + Math.abs(f.impact).toLocaleString() + '฿</div>';
+    factorList.appendChild(row);
+  });
+
+  resultEmpty.style.display = 'none';
+  resultBody.classList.add('show');
+  pill4.classList.add('active');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements_chatbot.txt .
+RUN pip install --no-cache-dir -r requirements_chatbot.txt
+
+COPY chatbot_server.py chatbot_dataset.json ./
+
+EXPOSE 5001
+ENV FLASK_DEBUG=0 PYTHONUNBUFFERED=1
+
+CMD ["gunicorn", "-w", "1", "--threads", "4", "--timeout", "60", "-b", "0.0.0.0:5001", "chatbot_server:app"]

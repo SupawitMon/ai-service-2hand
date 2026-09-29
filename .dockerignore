@@ -1,0 +1,12 @@
+.git
+.venv
+venv
+runs
+grade_dataset_v3
+__pycache__
+*.mp4
+*.md
+yolo26n.pt
+yolov8n-cls.pt
+defect_detector.pt
+train_grade_v3.py

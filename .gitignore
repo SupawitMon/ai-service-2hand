@@ -7,12 +7,21 @@ __pycache__/
 # ผลเทรนและ dataset (ใหญ่ ไม่ต้องขึ้น GitHub)
 runs/
 grade_dataset_v3/
+grade_dataset_v4/
+train/
+valid/
+data.yaml
+README.dataset.txt
+README.roboflow.txt
+Used_Electronics_Defects_v4/
 
-# โมเดลตั้งต้นที่ ultralytics โหลดเองได้
+# โมเดลตั้งต้นที่ ultralytics โหลดเองได้ และโมเดลเก่า
 yolo26n.pt
 yolov8n-cls.pt
+best_old.pt
 
 # อื่นๆ
 *.mp4
+*.zip
 _tmp_upload.jpg
 .env

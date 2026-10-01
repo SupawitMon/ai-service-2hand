@@ -5,8 +5,8 @@ services:
     restart: unless-stopped
     environment:
       - FLASK_DEBUG=0
-    ports:
-      - "5000:5000"          # API ประเมินราคา/เกรด: http://localhost:5000
+    expose:
+      - "5000"               # ใช้ภายใน — เรียกจากข้างนอกผ่าน nginx ที่พอร์ต 8012
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
       interval: 30s
@@ -23,7 +23,7 @@ services:
     environment:
       - FLASK_DEBUG=0
     ports:
-      - "5001:5001"          # API แชทบอทถาม-ตอบ: http://localhost:5001
+      - "8013:5001"          # แชทบอทโดยตรง + Swagger: http://<IP>:8013/apidocs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/"]
       interval: 30s
@@ -36,7 +36,7 @@ services:
     container_name: ai-frontend
     restart: unless-stopped
     ports:
-      - "8080:80"            # หน้าเว็บทั้งหมด: http://localhost:8080
+      - "8012:80"            # หน้าเว็บ + API ทั้งหมด: http://<IP>:8012
     volumes:
       - ./mockup_ai_price.html:/usr/share/nginx/html/mockup_ai_price.html:ro
       - ./negotiation_chatbot.html:/usr/share/nginx/html/negotiation_chatbot.html:ro

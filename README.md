@@ -20,11 +20,14 @@ docker compose up -d --build
 
 | ใช้ทำอะไร | ที่อยู่ |
 |---|---|
-| หน้าเว็บประเมินราคา | http://localhost:8080 |
-| หน้าเว็บแชทบอทเจรจา | http://localhost:8080/negotiation_chatbot.html |
-| API ประเมินราคา/เกรด | http://localhost:5000 |
-| API แชทบอทถาม-ตอบ | http://localhost:5001 |
-| Swagger ราคา / แชทบอท | http://localhost:5000/apidocs , http://localhost:5001/apidocs |
+| หน้าเว็บประเมินราคา | http://localhost:8012 |
+| หน้าเว็บแชทบอทเจรจา | http://localhost:8012/negotiation_chatbot.html |
+| API ประเมินราคา/เกรด | http://localhost:8012/api/... |
+| API แชทบอทถาม-ตอบ | http://localhost:8012/api/chat |
+| Swagger ราคา | http://localhost:8012/apidocs |
+| Swagger แชทบอท | http://localhost:8013/apidocs |
+
+บนเซิร์ฟเวอร์ เปลี่ยน `localhost` เป็น IP ของเครื่อง ใช้แค่ 2 พอร์ต: **8012** และ **8013**
 
 คำสั่งที่ใช้บ่อย:
 
@@ -36,14 +39,16 @@ docker compose up -d --build     # อัปเดตหลังแก้โค
 
 ## API
 
+ทุก path เรียกผ่านพอร์ต 8012 ได้หมด
+
 | Method | Path | ใช้ทำอะไร |
 |---|---|---|
 | GET | `/api/options` | รายชื่อยี่ห้อ/รุ่นทั้งหมด |
 | POST | `/api/predict-grade` | ส่งรูป (form-data ชื่อ `image`) ได้เกรด A/B/C |
 | POST | `/api/predict-price` | ส่ง JSON `brand`, `model`, `grade`, `accessories` ได้ช่วงราคา + ปัจจัยที่มีผล |
-| POST | `/api/chat` (พอร์ต 5001) | ส่ง JSON `message` ได้คำตอบแชทบอท |
-| GET | `/api/chat/stats` (พอร์ต 5001) | สถิติของ dataset แชทบอท |
-| GET | `/api/chat/sample-questions` (พอร์ต 5001) | ตัวอย่างคำถาม |
+| POST | `/api/chat` | ส่ง JSON `message` ได้คำตอบแชทบอท |
+| GET | `/api/chat/stats` | สถิติของ dataset แชทบอท |
+| GET | `/api/chat/sample-questions` | ตัวอย่างคำถาม |
 
 ## รันแบบไม่ใช้ Docker
 

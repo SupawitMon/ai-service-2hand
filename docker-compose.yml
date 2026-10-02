@@ -22,6 +22,12 @@ services:
     restart: unless-stopped
     environment:
       - FLASK_DEBUG=0
+      - FALLBACK_THRESHOLD=0.25        # ความมั่นใจต่ำกว่านี้ = ไม่ตอบ แล้วถามกลับ
+      - SESSION_TTL_SEC=1800           # จำบริบทการคุย 30 นาที
+      - LOG_RETENTION_DAYS=30          # เก็บ log ย้อนหลัง 30 วัน (หมุนไฟล์ทุกเที่ยงคืน)
+      - LOG_ACCESS_TOKEN=${LOG_ACCESS_TOKEN:-}   # ตั้งใน .env เพื่อเปิด GET /api/logs/<request_id>
+    volumes:
+      - ./logs:/app/logs
     ports:
       - "8013:5001"          # แชทบอทโดยตรง + Swagger: http://<IP>:8013/apidocs
     healthcheck:

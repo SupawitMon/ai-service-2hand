@@ -8,9 +8,16 @@ WORKDIR /app
 COPY requirements_chatbot.txt .
 RUN pip install --no-cache-dir -r requirements_chatbot.txt
 
+# โค้ด + Knowledge Base (แหล่งข้อมูลเดียวที่แชทบอทใช้ตอบ)
 COPY chatbot_server.py chatbot_dataset.json ./
+COPY kb/ ./kb/
+
+# log แต่ละ request (JSONL) — mount เป็น volume ใน docker-compose ให้อยู่รอดตอน rebuild
+RUN mkdir -p /app/logs
+ENV CHAT_LOG_DIR=/app/logs
 
 EXPOSE 5001
 ENV FLASK_DEBUG=0 PYTHONUNBUFFERED=1
 
-CMD ["gunicorn", "-w", "1", "--threads", "4", "--timeout", "60", "-b", "0.0.0.0:5001", "chatbot_server:app"]
+# 1 worker = session/metrics อยู่ใน memory ก้อนเดียวกัน (ถ้าจะขยายหลาย worker ต้องย้าย session ไป Redis)
+CMD ["gunicorn", "-w", "1", "--threads", "8", "--timeout", "60", "-b", "0.0.0.0:5001", "chatbot_server:app"]

@@ -1,0 +1,14 @@
+{
+ "kb_version": "2026.10.02",
+ "built_at": "2026-10-02T15:04:38",
+ "sources": [
+  "chatbot_dataset.json (QA, 500 rows)",
+  "kb/price_table.json"
+ ],
+ "counts": {
+  "listings": 430,
+  "products": 107,
+  "sellers": 40
+ },
+ "price_note": "ราคามือสองสภาพดี (บาท) ประมาณการจากตลาดมือสองไทย ปี 2026 — ควรให้ QA ตรวจทานกับประกาศขายจริง (Marketplace/Kaidee) รุ่นละ 3-5 ประกาศ"
+}

@@ -1,8 +1,10 @@
 # AI Service ตลาดสินค้ามือสอง
 
 - ประเมินราคา: ทายเกรดสภาพจากรูป (YOLO) + ประเมินราคา (XGBoost)
-- แชทบอทถาม-ตอบ: ค้นคำตอบจาก dataset 500 ข้อ (TF-IDF)
-- แชทบอทเจรจาต่อรอง: หน้าเว็บ `negotiation_chatbot.html` (คำนวณใน JavaScript ไม่ต้องใช้ server)
+- แชทบอทถาม-ตอบ: ตัวจำแนก intent + ตอบจาก Knowledge Base (`kb/`) พร้อม session, request ID, log, metrics
+- แชทบอทเจรจาต่อรอง: หน้าเว็บ `negotiation_chatbot.html` ใช้ตัวจำแนก intent เดียวกันผ่าน `/api/negotiate/intent`
+
+**สเปกแชทบอทและผลรับงานตามเกณฑ์ SE:** [`docs/AI_CHATBOT_SPEC.md`](docs/AI_CHATBOT_SPEC.md)
 
 ## รันด้วย Docker (แนะนำ)
 
@@ -49,6 +51,10 @@ docker compose up -d --build     # อัปเดตหลังแก้โค
 | POST | `/api/chat` | ส่ง JSON `message` ได้คำตอบแชทบอท |
 | GET | `/api/chat/stats` | สถิติของ dataset แชทบอท |
 | GET | `/api/chat/sample-questions` | ตัวอย่างคำถาม |
+| POST | `/api/negotiate/intent` | ส่ง JSON `message`, `current_product` ได้ action ของแชทเจรจา |
+| GET | `/api/metrics` | latency P50/P95/P99, อัตรา fallback |
+| GET | `/api/kb/info` | เวอร์ชัน KB และ threshold |
+| GET | `/api/logs/<request_id>` | ดู log (ต้องมี header `X-Admin-Token`) |
 
 ## รันแบบไม่ใช้ Docker
 
@@ -59,6 +65,24 @@ python chatbot_server.py    # หน้าต่างที่ 2
 ```
 
 แล้วดับเบิลคลิกเปิด `mockup_ai_price.html` หรือ `negotiation_chatbot.html`
+
+## วัดผลแชทบอท
+
+```bash
+python eval_chatbot.py                                   # ชุด dev
+python eval_chatbot.py --cases tests/test_cases_blind.json --out blind
+python eval_chatbot.py --url http://<IP>:8012            # วัดกับเซิร์ฟเวอร์จริง (ต้อง pip install requests)
+```
+ผลอยู่ที่ `reports/`
+
+## อัปเดตข้อมูลสินค้า/ราคาของแชทบอท
+
+แก้ `kb/price_table.json` หรือ `chatbot_dataset.json` แล้วรัน `python build_kb.py` และ `python sync_negotiation_catalog.py`
+
+## ดู log ย้อนหลัง
+
+คัดลอก `.env.example` เป็น `.env` แล้วตั้ง `LOG_ACCESS_TOKEN` จากนั้น `docker compose up -d` แล้วเรียก
+`curl -H "X-Admin-Token: <รหัส>" http://<IP>:8012/api/logs/<request_id>` (log เก็บ 30 วันที่โฟลเดอร์ `logs/`)
 
 ## เปลี่ยนโมเดลเกรดเป็นตัวใหม่
 

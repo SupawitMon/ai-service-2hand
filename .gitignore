@@ -20,6 +20,10 @@ yolo26n.pt
 yolov8n-cls.pt
 best_old.pt
 
+# log ของแชทบอท (มีข้อมูลผู้ใช้ ไม่ขึ้น GitHub) และไฟล์ทดสอบชั่วคราว
+logs/
+reports/eval_logs/
+
 # อื่นๆ
 *.mp4
 *.zip

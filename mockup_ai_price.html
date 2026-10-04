@@ -124,6 +124,18 @@
     outline:none;border-color:var(--mint-3);box-shadow:0 0 0 3px rgba(110,231,200,.25);
   }
   .field textarea{resize:vertical;min-height:56px;}
+  /* ช่องพิมพ์ + dropdown (combobox) */
+  .combo{position:relative;}
+  .combo input{padding-right:40px !important;}
+  .combo-arrow{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;background:transparent;
+    color:var(--ink-soft);font-size:14px;cursor:pointer;border-radius:6px;}
+  .combo-arrow:hover{background:var(--mint-0);}
+  .combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;margin:0;padding:4px;list-style:none;background:#fff;
+    border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 8px 24px rgba(0,0,0,.10);max-height:260px;overflow-y:auto;}
+  .combo-list li{padding:8px 10px;border-radius:6px;font-size:14px;color:var(--ink);cursor:pointer;}
+  .combo-list li.active, .combo-list li:hover{background:var(--mint-0);}
+  .combo-list li .sub{font-size:11.5px;color:var(--ink-mute);margin-left:6px;}
+  .combo-list li.empty{color:var(--ink-mute);cursor:default;background:none;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   .err{font-size:12px;color:var(--danger);margin-top:5px;display:none;}
   .err.show{display:block;}
@@ -222,15 +234,21 @@
 
       <div class="field">
         <label>ยี่ห้อสินค้า</label>
-        <input type="text" id="brandInput" list="brandList" autocomplete="off" placeholder="เช่น Apple, Samsung">
-        <datalist id="brandList"></datalist>
-        <div class="err" id="errModel">กรุณากรอกยี่ห้อและรุ่นสินค้า</div>
+        <div class="combo">
+          <input type="text" id="brandInput" autocomplete="off" placeholder="พิมพ์หรือกดเลือก เช่น Apple, Samsung">
+          <button type="button" class="combo-arrow" tabindex="-1" aria-label="เปิดรายการยี่ห้อ">▾</button>
+          <ul class="combo-list" hidden></ul>
+        </div>
       </div>
 
       <div class="field">
         <label>รุ่นสินค้า</label>
-        <input type="text" id="modelInput" list="modelList" autocomplete="off" placeholder="เช่น iPhone 13">
-        <datalist id="modelList"></datalist>
+        <div class="combo">
+          <input type="text" id="modelInput" autocomplete="off" placeholder="พิมพ์หรือกดเลือก เช่น iPhone 13">
+          <button type="button" class="combo-arrow" tabindex="-1" aria-label="เปิดรายการรุ่น">▾</button>
+          <ul class="combo-list" hidden></ul>
+        </div>
+        <div class="err" id="errModel">กรุณาเลือกยี่ห้อและรุ่นสินค้า</div>
       </div>
 
       <div class="field">
@@ -392,24 +410,82 @@ const pill4 = document.getElementById('pill-4');
 
 // ---- รายชื่อยี่ห้อ/รุ่นจาก backend (GET /api/options) ไว้ให้เลือกตอนพิมพ์ ----
 let BRAND_MODELS = {};
-const brandList = document.getElementById('brandList');
-const modelList = document.getElementById('modelList');
-function fillList(el, items){
-  el.innerHTML = '';
-  items.forEach(v => { const o = document.createElement('option'); o.value = v; el.appendChild(o); });
+const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9ก-๙]/g, '');
+
+/* ---------- combobox: พิมพ์เองก็ได้ กดเลือกจากรายการก็ได้ ----------
+   - พิมพ์แล้วรายการจะกรองตามที่พิมพ์ (ไม่สนตัวพิมพ์เล็ก/ใหญ่และช่องว่าง)
+   - กดปุ่ม ▾ หรือคลิกช่องว่าง = เปิดรายการทั้งหมด
+   - ↑ ↓ เลื่อน, Enter เลือก, Esc ปิด
+   - พิมพ์รุ่นที่ไม่มีในรายการก็ส่งได้ backend จะแนะนำรุ่นที่ใกล้เคียงให้ */
+function makeCombo(input, getItems, onPick){
+  const box = input.parentElement, list = box.querySelector('.combo-list'), arrow = box.querySelector('.combo-arrow');
+  let items = [], active = -1;
+  function open(showAll){
+    const q = showAll ? '' : norm(input.value);
+    items = getItems().filter(it => !q || norm(it.value).includes(q) || norm(it.sub || '').includes(q)).slice(0, 400);
+    list.innerHTML = '';
+    if(!items.length){
+      const li = document.createElement('li'); li.className = 'empty';
+      li.textContent = getItems().length ? 'ไม่พบในรายการ — พิมพ์ต่อเองได้เลย' : 'ยังโหลดรายชื่อไม่ได้ (รัน backend_server.py หรือยัง?)';
+      list.appendChild(li);
+    }
+    items.forEach((it, i) => {
+      const li = document.createElement('li');
+      li.textContent = it.value;
+      if(it.sub){ const s = document.createElement('span'); s.className = 'sub'; s.textContent = it.sub; li.appendChild(s); }
+      li.addEventListener('mousedown', e => { e.preventDefault(); pick(i); });
+      list.appendChild(li);
+    });
+    active = -1; list.hidden = false;
+  }
+  function close(){ list.hidden = true; active = -1; }
+  function pick(i){ const it = items[i]; input.value = it.value; close(); onPick && onPick(it); input.dispatchEvent(new Event('change')); }
+  function highlight(i){
+    const lis = list.querySelectorAll('li:not(.empty)');
+    if(!lis.length) return;
+    active = (i + lis.length) % lis.length;
+    lis.forEach((li, k) => li.classList.toggle('active', k === active));
+    lis[active].scrollIntoView({ block:'nearest' });
+  }
+  input.addEventListener('input', () => open(false));
+  input.addEventListener('focus', () => open(!input.value));
+  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('keydown', e => {
+    if(e.key === 'ArrowDown'){ e.preventDefault(); if(list.hidden) open(false); highlight(active + 1); }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); highlight(active - 1); }
+    else if(e.key === 'Enter' && !list.hidden && active >= 0){ e.preventDefault(); pick(active); }
+    else if(e.key === 'Escape'){ close(); }
+  });
+  arrow.addEventListener('mousedown', e => {
+    e.preventDefault();
+    if(list.hidden){ input.focus(); open(true); } else close();
+  });
 }
-function refreshModelList(){
-  const key = Object.keys(BRAND_MODELS).find(b => b.toLowerCase() === brandInput.value.trim().toLowerCase());
-  fillList(modelList, key ? BRAND_MODELS[key] : Object.values(BRAND_MODELS).flat());
+
+// แปลงที่พิมพ์ให้เป็นชื่อมาตรฐาน เช่น "apple" -> "Apple"
+function canonicalBrand(){
+  return Object.keys(BRAND_MODELS).find(b => norm(b) === norm(brandInput.value)) || null;
 }
+
+makeCombo(brandInput, () => Object.keys(BRAND_MODELS).sort().map(b => ({ value:b, sub:`${BRAND_MODELS[b].length} รุ่น` })),
+  () => { modelInput.value = ''; });
+// ช่องรุ่น: ถ้ารู้ยี่ห้อแล้วโชว์เฉพาะรุ่นของยี่ห้อนั้น ถ้ายังไม่รู้โชว์ทุกรุ่น (เลือกรุ่นแล้วเติมยี่ห้อให้อัตโนมัติ)
+makeCombo(modelInput, () => {
+  const b = canonicalBrand();
+  if(b) return BRAND_MODELS[b].map(m => ({ value:m }));
+  return Object.entries(BRAND_MODELS).flatMap(([br, ms]) => ms.map(m => ({ value:m, sub:br, brand:br })));
+}, it => { if(it.brand) brandInput.value = it.brand; });
+brandInput.addEventListener('blur', () => { const b = canonicalBrand(); if(b) brandInput.value = b; });
+
 fetch(API_BASE + '/api/options')
   .then(r => r.json())
-  .then(data => { BRAND_MODELS = data.brand_models || {}; fillList(brandList, data.brands || []); refreshModelList(); })
+  .then(data => { BRAND_MODELS = data.brand_models || {}; })
   .catch(() => {});
-brandInput.addEventListener('input', refreshModelList);
 
-brandInput.addEventListener('input', () => { if(brandInput.value) errModel.classList.remove('show'); });
-modelInput.addEventListener('input', () => { if(modelInput.value) errModel.classList.remove('show'); });
+brandInput.addEventListener('input', () => errModel.classList.remove('show'));
+brandInput.addEventListener('change', () => errModel.classList.remove('show'));
+modelInput.addEventListener('input', () => errModel.classList.remove('show'));
+modelInput.addEventListener('change', () => errModel.classList.remove('show'));
 
 function clearResult(){
   resultBody.classList.remove('show');
@@ -420,7 +496,7 @@ function clearResult(){
 
 submitBtn.addEventListener('click', () => {
   let valid = true;
-  if(!brandInput.value.trim() || !modelInput.value.trim()){ errModel.classList.add('show'); valid = false; }
+  if(!brandInput.value.trim() || !modelInput.value.trim()){ errModel.textContent = 'กรุณาพิมพ์หรือเลือกยี่ห้อและรุ่นสินค้า'; errModel.classList.add('show'); valid = false; }
   if(!valid) return;
 
   clearResult(); // เคลียร์ผลลัพธ์เก่าทิ้งก่อนเสมอ กันโชว์ค้างตอน error/ค้นหาสินค้าใหม่

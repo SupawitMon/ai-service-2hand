@@ -1,0 +1,1468 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "2HandToYou AI Service API",
+    "version": "1.0.0",
+    "description": "API ของทีม AI สำหรับแพลตฟอร์มซื้อขายสินค้ามือสอง 2HandToYou ประกอบด้วย 2 บริการ\n\n| บริการ | หน้าที่ | Container |\n|---|---|---|\n| **AI Price Service** | ทายเกรดสภาพสินค้าจากรูป (YOLO) และประเมินราคา (XGBoost) | `ai-price-backend` |\n| **AI ChatBot Service** | แชทบอทถาม-ตอบ และตัวจำแนก intent สำหรับแชทเจรจาต่อรอง | `ai-chatbot` |\n\nทุก endpoint เรียกผ่าน API Gateway (nginx) พอร์ต **8012** ได้ทั้งหมด\n\n### มาตรฐานร่วม\n- รูปแบบข้อมูล: `application/json` (UTF-8) ยกเว้น `/api/predict-grade` ที่ใช้ `multipart/form-data`\n- **Request ID (แชทบอท):** ส่ง header `X-Request-ID` (ตัวอักษร/ตัวเลข/`_`/`-` ยาว 8–64 ตัว) มาได้\n  ถ้าไม่ส่ง ระบบสร้างให้ และส่งคืนทั้งใน header `X-Request-ID` และฟิลด์ `request_id` ใช้ตามหา log ย้อนหลัง\n- **Session (แชทบอท):** ส่ง `session_id` เดิมทุกคำถามในบทสนทนาเดียวกัน ระบบจะจำบริบทให้ 30 นาที\n- Error ทุกตัวตอบเป็น JSON ที่มีฟิลด์ `error` (ข้อความภาษาไทย)\n- ยังไม่มีการยืนยันตัวตน (authentication) ยกเว้น `/api/logs/{request_id}` ที่ต้องใช้ `X-Admin-Token`\n",
+    "contact": {
+      "name": "ทีม AI — 2HandToYou",
+      "url": "https://github.com/SupawitMon/ai-service-2hand"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://{host}:8012",
+      "description": "API Gateway (nginx) — ใช้ตัวนี้เป็นหลัก ทุก endpoint ผ่านพอร์ตนี้ได้",
+      "variables": {
+        "host": {
+          "default": "localhost",
+          "description": "IP หรือชื่อโดเมนของเซิร์ฟเวอร์"
+        }
+      }
+    },
+    {
+      "url": "http://{host}:8013",
+      "description": "ChatBot Service โดยตรง (เฉพาะ endpoint หมวด Chat / Negotiation / Ops)",
+      "variables": {
+        "host": {
+          "default": "localhost"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "Price — Product",
+      "description": "ข้อมูลยี่ห้อ/รุ่นสินค้าที่ระบบประเมินราคาได้"
+    },
+    {
+      "name": "Price — Grade",
+      "description": "ทายเกรดสภาพสินค้าจากรูปภาพ"
+    },
+    {
+      "name": "Price — Estimate",
+      "description": "ประเมินราคาสินค้ามือสอง"
+    },
+    {
+      "name": "Chat",
+      "description": "แชทบอทถาม-ตอบ (รองรับคำถามต่อเนื่องด้วย session_id)"
+    },
+    {
+      "name": "Negotiation",
+      "description": "จำแนก intent ของข้อความในแชทเจรจาต่อรอง"
+    },
+    {
+      "name": "Ops",
+      "description": "ตรวจสอบสถานะ ประสิทธิภาพ และ log ของระบบ"
+    }
+  ],
+  "paths": {
+    "/api/options": {
+      "get": {
+        "tags": [
+          "Price — Product"
+        ],
+        "summary": "รายชื่อยี่ห้อและรุ่นทั้งหมด",
+        "description": "ใช้ทำ dropdown ยี่ห้อ/รุ่นในหน้าประเมินราคา ระบบประเมินราคาได้เฉพาะรุ่นในรายการนี้",
+        "operationId": "getOptions",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsResponse"
+                },
+                "example": {
+                  "brands": [
+                    "Apple",
+                    "Samsung"
+                  ],
+                  "brand_models": {
+                    "Apple": [
+                      "iPhone 13",
+                      "iPhone 14",
+                      "iPhone 15"
+                    ],
+                    "Samsung": [
+                      "Galaxy A54",
+                      "Galaxy S22"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/predict-grade": {
+      "post": {
+        "tags": [
+          "Price — Grade"
+        ],
+        "summary": "ทายเกรดสภาพสินค้าจากรูป",
+        "description": "ส่งรูปสินค้า 1 รูป ได้เกรดสภาพ (YOLO classification)\n- **A** สภาพดีมาก (90–100%) · **B** สภาพดี (70–89%) · **C** สภาพพอใช้ (ต่ำกว่า 70%)\n- `confidence` คือความมั่นใจของโมเดล (0–1) ถ้าต่ำ ควรให้ผู้ใช้ยืนยัน/เลือกเกรดเอง\n",
+        "operationId": "predictGrade",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ไฟล์รูปสินค้า (jpg / png) ขนาดไม่เกิน 20 MB"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradeResponse"
+                },
+                "example": {
+                  "grade": "B",
+                  "confidence": 0.94
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ไม่ได้แนบไฟล์รูป",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "ไม่พบไฟล์รูปภาพ"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "โมเดล YOLO โหลดไม่สำเร็จ (บริการประเมินราคายังใช้ได้ตามปกติ)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "YOLO model ยังไม่ได้โหลด (เช็ค ultralytics ติดตั้งหรือยัง)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/predict-price": {
+      "post": {
+        "tags": [
+          "Price — Estimate"
+        ],
+        "summary": "ประเมินราคาสินค้า",
+        "description": "ประเมินช่วงราคาที่แนะนำด้วยโมเดล XGBoost โดยเติมข้อมูลตลาดของรุ่นนั้นจากฐานข้อมูลอ้างอิงให้อัตโนมัติ\n- ชื่อยี่ห้อ/รุ่นไม่สนตัวพิมพ์เล็ก-ใหญ่และช่องว่าง (เช่น `iphone13` = `iPhone 13`)\n- ถ้าไม่พบรุ่น จะตอบ 404 พร้อม `suggestions` รุ่นที่ใกล้เคียง\n- `factors` บอกว่าแต่ละปัจจัยดันราคาขึ้น/ลงกี่บาท (เทียบกับราคาเฉลี่ยของสินค้าทั้งหมดในระบบ)\n",
+        "operationId": "predictPrice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceRequest"
+              },
+              "example": {
+                "brand": "Apple",
+                "model": "iPhone 13",
+                "grade": "B",
+                "accessories": "full"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceResponse"
+                },
+                "example": {
+                  "recommended_min": 16200,
+                  "recommended_max": 18600,
+                  "expected_price": 17400,
+                  "price_confidence": 0.86,
+                  "condition_note": "พบตำหนิเล็กน้อย เช่น รอยขีดข่วนหรือรอยบุบเบาๆ ทำให้ราคาลดลงจากสภาพสมบูรณ์เล็กน้อย",
+                  "product": {
+                    "brand": "Apple",
+                    "model": "iPhone 13"
+                  },
+                  "reference": {
+                    "category": "Mobile Phones",
+                    "subcategory": "Smartphone",
+                    "market_average_price": 21589,
+                    "historical_sold_price": 20456
+                  },
+                  "factors": [
+                    {
+                      "label": "ราคาตลาดของรุ่นนี้",
+                      "pct": 64,
+                      "impact": 3020
+                    },
+                    {
+                      "label": "สภาพสินค้า (เกรด)",
+                      "pct": 30,
+                      "impact": 1420
+                    },
+                    {
+                      "label": "อุปกรณ์ที่ให้มา",
+                      "pct": 6,
+                      "impact": 270
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ไม่ได้ระบุยี่ห้อหรือรุ่น",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "กรุณาระบุยี่ห้อและรุ่นสินค้า"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ไม่พบรุ่นในฐานข้อมูล (มีรุ่นใกล้เคียงแนะนำ)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundWithSuggestions"
+                },
+                "example": {
+                  "error": "ไม่พบรุ่น Apple iphone ในฐานข้อมูล — หมายถึง: Apple iPhone 13, Apple iPhone 14, Apple iPhone 11, Apple iPhone 12, Apple iPhone 15 ใช่ไหม?",
+                  "suggestions": [
+                    "Apple iPhone 13",
+                    "Apple iPhone 14",
+                    "Apple iPhone 11",
+                    "Apple iPhone 12",
+                    "Apple iPhone 15"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "ถามแชทบอท",
+        "description": "ตอบคำถามเรื่องสินค้า ราคา ผู้ขาย การค้นหา และนโยบายของตลาด ตอบจาก Knowledge Base (KB) ของระบบเท่านั้น\n- ส่ง `session_id` เดิมในคำถามถัดไป บอทจะใช้บริบทเดิม (เช่น ถาม \"แล้วสภาพล่ะ\" ต่อจากคำถามราคา) ดูได้ที่ `context_used`\n- ถ้าไม่ส่ง `session_id` ระบบสร้างให้และคืนค่าใน response\n- ถ้าบอทไม่แน่ใจ/ไม่มีข้อมูล จะตอบ `is_fallback: true` พร้อม `fallback_reason` และ `suggestions` แทนการเดา\n- รองรับภาษาไทยและอังกฤษ (ตอบภาษาเดียวกับคำถาม) และแก้คำพิมพ์ผิดของชื่อรุ่น (เช่น `ipone` → `iPhone`)\n- คำขอข้อมูลติดต่อส่วนตัว (เบอร์/ไลน์/อีเมล/ที่อยู่) ถูกปฏิเสธเสมอ (`guardrail: pii_guardrail`, นโยบาย BR003)\n",
+        "operationId": "chat",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XRequestID"
+          },
+          {
+            "name": "X-Session-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "description": "ใช้แทน `session_id` ใน body ได้"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              },
+              "examples": {
+                "price": {
+                  "summary": "ถามราคา",
+                  "value": {
+                    "message": "iPhone 13 ราคาเท่าไหร่",
+                    "session_id": "user-123"
+                  }
+                },
+                "followup": {
+                  "summary": "ถามต่อเนื่อง (session เดิม)",
+                  "value": {
+                    "message": "แล้วสภาพเป็นไงบ้าง",
+                    "session_id": "user-123"
+                  }
+                },
+                "unknown": {
+                  "summary": "รุ่นที่ไม่มีในระบบ (fallback)",
+                  "value": {
+                    "message": "iPhone 16 Pro Max ราคาเท่าไหร่",
+                    "session_id": "user-9"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "สำเร็จ (รวมกรณี fallback ซึ่งดูได้จาก `is_fallback`)",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              },
+              "X-Response-Time-ms": {
+                "$ref": "#/components/headers/XResponseTime"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                },
+                "examples": {
+                  "answered": {
+                    "summary": "ตอบได้ (ใช้บริบทจาก session)",
+                    "value": {
+                      "request_id": "2c65aa3a3be24266",
+                      "session_id": "user-123",
+                      "response": "Apple iPhone 13 ในระบบมีสภาพ: New ×7",
+                      "intent": "condition",
+                      "intent_category": "Product Info",
+                      "confidence": 0.558,
+                      "confidence_level": "medium",
+                      "is_fallback": false,
+                      "fallback_reason": null,
+                      "suggestions": [],
+                      "entities": {
+                        "product": null,
+                        "seller": null,
+                        "category": null,
+                        "budget": null
+                      },
+                      "context_used": {
+                        "product": "Apple iPhone 13"
+                      },
+                      "source": {
+                        "type": "kb",
+                        "kb_version": "2026.10.02",
+                        "ids": [
+                          "L0064",
+                          "L0100",
+                          "L0109"
+                        ]
+                      },
+                      "matched_question": null,
+                      "guardrail": null,
+                      "latency_ms": 4.34
+                    }
+                  },
+                  "fallback": {
+                    "summary": "Fallback — รุ่นที่ไม่มีในระบบ",
+                    "value": {
+                      "request_id": "02e94109123e45be",
+                      "session_id": "user-9",
+                      "response": "ขออภัย ไม่มี \"iphone 16 pro max\" ในระบบตอนนี้ รุ่นใกล้เคียงที่มี: Apple iPhone 11, Apple iPhone 13, Apple iPhone 13 Pro, Apple iPhone 14, Apple iPhone SE (2022)",
+                      "intent": "price",
+                      "intent_category": "Fallback",
+                      "confidence": 0.957,
+                      "confidence_level": "high",
+                      "is_fallback": true,
+                      "fallback_reason": "unknown_product",
+                      "suggestions": [
+                        "ราคา Apple iPhone 11 เท่าไหร่",
+                        "ราคา Apple iPhone 13 เท่าไหร่",
+                        "ราคา Apple iPhone 13 Pro เท่าไหร่"
+                      ],
+                      "entities": {
+                        "product": null,
+                        "seller": null,
+                        "category": null,
+                        "budget": null
+                      },
+                      "context_used": {},
+                      "source": {
+                        "type": "none"
+                      },
+                      "matched_question": null,
+                      "guardrail": null,
+                      "latency_ms": 2.38
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ไม่ได้ส่ง `message`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithRequestId"
+                },
+                "example": {
+                  "error": "กรุณาระบุข้อความคำถาม (message)",
+                  "request_id": "b89d603201254ae5"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/negotiate/intent": {
+      "post": {
+        "tags": [
+          "Negotiation"
+        ],
+        "summary": "จำแนกข้อความในแชทเจรจา",
+        "description": "ใช้ตัวจำแนก intent เดียวกับแชทบอท แปลงข้อความของผู้ซื้อเป็น `action` ให้หน้าแชทเจรจาตอบสนอง\n- `offer` เสนอราคา (ราคาอยู่ใน `price` รองรับ `15000`, `15,000`, `15k`, `หมื่นห้า`)\n- `spec` ถามสภาพ/สเปก · `trust` ถามความน่าเชื่อถือผู้ขาย · `market` เทียบราคาตลาด · `pii` ขอข้อมูลติดต่อ (ต้องปฏิเสธ)\n- `other_product` พูดถึงรุ่นอื่นที่มีในระบบ (`product_mention`) · `unknown_product` รุ่นที่ไม่มี (`unknown_mention`, `similar`)\n- `greeting` · `farewell` · `other` (ไม่แน่ใจ)\n",
+        "operationId": "negotiateIntent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XRequestID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NegotiateRequest"
+              },
+              "example": {
+                "message": "ขอเหลือหมื่นห้าได้ไหม",
+                "current_product": "Sony PlayStation 5",
+                "session_id": "nego-1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NegotiateResponse"
+                },
+                "example": {
+                  "request_id": "ad706fc775704cd9",
+                  "action": "offer",
+                  "intent": "offer",
+                  "confidence": 0.254,
+                  "price": 15000,
+                  "product_mention": null,
+                  "unknown_mention": null,
+                  "similar": [],
+                  "guardrail": null,
+                  "top_intents": [
+                    [
+                      "offer",
+                      0.254
+                    ],
+                    [
+                      "pii",
+                      0.052
+                    ],
+                    [
+                      "discount",
+                      0.049
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "tags": [
+          "Ops"
+        ],
+        "summary": "Latency / จำนวน request / อัตรา fallback",
+        "description": "สถิติตั้งแต่ ChatBot Service เริ่มทำงาน (เก็บใน memory รีเซ็ตเมื่อ restart)",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                },
+                "example": {
+                  "since": "2026-10-05T06:56:37",
+                  "active_sessions": 2,
+                  "endpoints": {
+                    "/api/chat": {
+                      "requests": 4,
+                      "fallback_rate": 0.25,
+                      "latency_ms": {
+                        "p50": 3.45,
+                        "p95": 10.76,
+                        "p99": 11.65,
+                        "max": 11.87
+                      }
+                    }
+                  },
+                  "intents": {
+                    "price": 2,
+                    "condition": 1,
+                    "offer": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/info": {
+      "get": {
+        "tags": [
+          "Ops"
+        ],
+        "summary": "ข้อมูล Knowledge Base และค่าตั้งของแชทบอท",
+        "operationId": "getKbInfo",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbInfoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/{request_id}": {
+      "get": {
+        "tags": [
+          "Ops"
+        ],
+        "summary": "ดู log ของคำขอ (สำหรับผู้ดูแลระบบ)",
+        "description": "ค้นหา log จาก `request_id` (เก็บย้อนหลัง 30 วัน เบอร์โทร/อีเมลในข้อความถูกปิดบังก่อนบันทึก)\nต้องส่ง header `X-Admin-Token` ให้ตรงกับค่า `LOG_ACCESS_TOKEN` ที่ตั้งไว้บนเซิร์ฟเวอร์ ถ้าไม่ได้ตั้งค่านี้ endpoint จะปิด (403)\n",
+        "operationId": "getLog",
+        "security": [
+          {
+            "AdminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "7f3a9c21d4e84b10"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "พบ log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogRecord"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ไม่มีสิทธิ์ (token ไม่ตรง หรือยังไม่ได้เปิดใช้งาน)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ไม่พบ request_id นี้ใน log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/stats": {
+      "get": {
+        "tags": [
+          "Ops"
+        ],
+        "summary": "สถิติข้อมูลของแชทบอท",
+        "operationId": "getChatStats",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStatsResponse"
+                },
+                "example": {
+                  "total_questions": 500,
+                  "listings": 430,
+                  "products": 107,
+                  "intent_categories": {
+                    "Pricing": 106,
+                    "Discovery": 103,
+                    "Product Info": 61,
+                    "Support": 42
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/sample-questions": {
+      "get": {
+        "tags": [
+          "Ops"
+        ],
+        "summary": "ตัวอย่างคำถาม (สุ่มต่างหมวดกัน)",
+        "operationId": "getSampleQuestions",
+        "parameters": [
+          {
+            "name": "n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 4
+            },
+            "description": "จำนวนคำถาม"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleQuestionsResponse"
+                },
+                "example": {
+                  "questions": [
+                    {
+                      "question": "Apple iPhone 13 Pro ส่งด้วยขนส่งอะไรคะ",
+                      "intent_category": "Logistics"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AdminToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Admin-Token",
+        "description": "ค่าเดียวกับ env `LOG_ACCESS_TOKEN` บนเซิร์ฟเวอร์"
+      }
+    },
+    "parameters": {
+      "XRequestID": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{8,64}$"
+        },
+        "description": "รหัสอ้างอิงคำขอ (ไม่ส่งก็ได้ ระบบสร้างให้)",
+        "example": "7f3a9c21d4e84b10"
+      }
+    },
+    "headers": {
+      "XRequestID": {
+        "description": "รหัสอ้างอิงคำขอ (ใช้ค้นหา log)",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XResponseTime": {
+        "description": "เวลาประมวลผลฝั่งเซิร์ฟเวอร์ (มิลลิวินาที)",
+        "schema": {
+          "type": "number"
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "ข้อความแจ้งข้อผิดพลาด"
+          }
+        }
+      },
+      "ErrorWithRequestId": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Error"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "NotFoundWithSuggestions": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Error"
+          },
+          {
+            "type": "object",
+            "required": [
+              "suggestions"
+            ],
+            "properties": {
+              "suggestions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "รุ่นที่ใกล้เคียง (รูปแบบ \"ยี่ห้อ รุ่น\")"
+              }
+            }
+          }
+        ]
+      },
+      "OptionsResponse": {
+        "type": "object",
+        "required": [
+          "brands",
+          "brand_models"
+        ],
+        "properties": {
+          "brands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "รายชื่อยี่ห้อ (เรียงตามตัวอักษร)"
+          },
+          "brand_models": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "รุ่นของแต่ละยี่ห้อ {ยี่ห้อ: [รุ่น]}"
+          }
+        }
+      },
+      "GradeResponse": {
+        "type": "object",
+        "required": [
+          "grade",
+          "confidence"
+        ],
+        "properties": {
+          "grade": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "PriceRequest": {
+        "type": "object",
+        "required": [
+          "brand",
+          "model"
+        ],
+        "properties": {
+          "brand": {
+            "type": "string",
+            "example": "Apple"
+          },
+          "model": {
+            "type": "string",
+            "example": "iPhone 13"
+          },
+          "grade": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ],
+            "default": "B",
+            "description": "เกรดสภาพ (จาก /api/predict-grade หรือผู้ใช้เลือกเอง)"
+          },
+          "accessories": {
+            "type": "string",
+            "enum": [
+              "full",
+              "partial",
+              "none"
+            ],
+            "default": "partial",
+            "description": "full = ครบกล่อง+อุปกรณ์ · partial = มีบางส่วน · none = ไม่มี"
+          },
+          "year": {
+            "type": "integer",
+            "example": 2023,
+            "description": "ปีที่ผลิต (ไม่บังคับ — มีผลต่อราคาน้อยมาก)"
+          }
+        }
+      },
+      "PriceFactor": {
+        "type": "object",
+        "required": [
+          "label",
+          "pct",
+          "impact"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "ชื่อปัจจัย"
+          },
+          "pct": {
+            "type": "integer",
+            "description": "สัดส่วนผลกระทบ (%)"
+          },
+          "impact": {
+            "type": "integer",
+            "description": "จำนวนบาทที่ปัจจัยนี้ดันราคาขึ้น (+) หรือลง (−)"
+          }
+        }
+      },
+      "PriceResponse": {
+        "type": "object",
+        "required": [
+          "recommended_min",
+          "recommended_max",
+          "expected_price",
+          "price_confidence",
+          "factors",
+          "product"
+        ],
+        "properties": {
+          "recommended_min": {
+            "type": "integer",
+            "description": "ราคาต่ำสุดที่แนะนำ (บาท)"
+          },
+          "recommended_max": {
+            "type": "integer",
+            "description": "ราคาสูงสุดที่แนะนำ (บาท)"
+          },
+          "expected_price": {
+            "type": "integer",
+            "description": "ราคากลางที่แนะนำ (บาท)"
+          },
+          "price_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "ความมั่นใจของราคาที่ประเมิน"
+          },
+          "condition_note": {
+            "type": "string",
+            "description": "คำอธิบายผลของเกรดต่อราคา"
+          },
+          "product": {
+            "type": "object",
+            "description": "ชื่อยี่ห้อ/รุ่นที่ระบบจับคู่ได้ (สะกดมาตรฐาน)",
+            "properties": {
+              "brand": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            }
+          },
+          "reference": {
+            "type": "object",
+            "description": "ข้อมูลตลาดอ้างอิงของรุ่นนี้",
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "subcategory": {
+                "type": "string"
+              },
+              "market_average_price": {
+                "type": "integer"
+              },
+              "historical_sold_price": {
+                "type": "integer"
+              }
+            }
+          },
+          "factors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceFactor"
+            }
+          }
+        }
+      },
+      "ChatRequest": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "คำถามของผู้ใช้"
+          },
+          "session_id": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "รหัสบทสนทนา (ส่งค่าเดิมทุกคำถามในบทสนทนาเดียวกัน)"
+          }
+        }
+      },
+      "ChatResponse": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "session_id",
+          "response",
+          "intent",
+          "intent_category",
+          "confidence",
+          "confidence_level",
+          "is_fallback",
+          "source"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "response": {
+            "type": "string",
+            "description": "คำตอบของบอท"
+          },
+          "intent": {
+            "type": "string",
+            "description": "เจตนาของคำถามที่ระบบจำแนกได้",
+            "enum": [
+              "price",
+              "price_compare",
+              "market_trend",
+              "condition",
+              "spec",
+              "availability",
+              "seller_reputation",
+              "seller_negotiation",
+              "search",
+              "recommend",
+              "similar",
+              "shipping",
+              "warranty",
+              "discount",
+              "policy",
+              "report_seller",
+              "report_product",
+              "complaint",
+              "pii",
+              "greeting",
+              "farewell",
+              "off_topic"
+            ]
+          },
+          "intent_category": {
+            "type": "string",
+            "enum": [
+              "Pricing",
+              "Product Info",
+              "Seller Info",
+              "Discovery",
+              "Logistics",
+              "Policy",
+              "Support",
+              "Security/PDPA",
+              "Conversational",
+              "Fallback"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "confidence_level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "is_fallback": {
+            "type": "boolean",
+            "description": "true = บอทไม่ได้ตอบคำถาม (ไม่แน่ใจ/ไม่มีข้อมูล/นอกเรื่อง)"
+          },
+          "fallback_reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "low_confidence",
+              "off_topic",
+              "unknown_product",
+              "need_product",
+              "need_seller",
+              "need_category",
+              null
+            ],
+            "description": "low_confidence = ไม่แน่ใจเจตนา · off_topic = นอกเรื่อง · unknown_product = รุ่นไม่มีในระบบ ·\nneed_product / need_seller / need_category = ต้องระบุสินค้า / ผู้ขาย / หมวดเพิ่ม\n"
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "คำถามที่แนะนำให้ถามต่อ (มีเมื่อ fallback)"
+          },
+          "entities": {
+            "type": "object",
+            "description": "สิ่งที่ระบบจับได้จากข้อความนี้",
+            "properties": {
+              "product": {
+                "type": "string",
+                "nullable": true
+              },
+              "seller": {
+                "type": "string",
+                "nullable": true,
+                "example": "S00005"
+              },
+              "category": {
+                "type": "string",
+                "nullable": true
+              },
+              "budget": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          },
+          "context_used": {
+            "type": "object",
+            "description": "บริบทที่ดึงมาจาก session (ถ้ามี)",
+            "properties": {
+              "product": {
+                "type": "string"
+              },
+              "seller": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              }
+            }
+          },
+          "source": {
+            "type": "object",
+            "description": "แหล่งข้อมูลที่ใช้ตอบ",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "kb",
+                  "none"
+                ]
+              },
+              "kb_version": {
+                "type": "string"
+              },
+              "ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "รหัส listing (L0001), seller:S00005, price_table:<รุ่น>, policy:<หัวข้อ>"
+              }
+            }
+          },
+          "matched_question": {
+            "type": "string",
+            "nullable": true,
+            "description": "คำถามใน dataset ที่ใกล้ที่สุด (ถ้าใกล้พอ)"
+          },
+          "guardrail": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "pii_guardrail",
+              null
+            ]
+          },
+          "latency_ms": {
+            "type": "number"
+          }
+        }
+      },
+      "NegotiateRequest": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "current_product": {
+            "type": "string",
+            "description": "ชื่อสินค้าที่กำลังเจรจาอยู่"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "NegotiateResponse": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "action",
+          "intent",
+          "confidence"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "offer",
+              "spec",
+              "trust",
+              "market",
+              "pii",
+              "other_product",
+              "unknown_product",
+              "greeting",
+              "farewell",
+              "other"
+            ]
+          },
+          "intent": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "price": {
+            "type": "integer",
+            "nullable": true,
+            "description": "ราคาที่เสนอ (เมื่อ action = offer)"
+          },
+          "product_mention": {
+            "type": "string",
+            "nullable": true
+          },
+          "unknown_mention": {
+            "type": "string",
+            "nullable": true
+          },
+          "similar": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "guardrail": {
+            "type": "string",
+            "nullable": true
+          },
+          "top_intents": {
+            "type": "array",
+            "description": "3 อันดับ intent ที่เป็นไปได้ [ชื่อ, ความน่าจะเป็น]",
+            "items": {
+              "type": "array",
+              "items": {}
+            }
+          }
+        }
+      },
+      "MetricsResponse": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "active_sessions": {
+            "type": "integer"
+          },
+          "endpoints": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "requests": {
+                  "type": "integer"
+                },
+                "fallback_rate": {
+                  "type": "number"
+                },
+                "latency_ms": {
+                  "type": "object",
+                  "properties": {
+                    "p50": {
+                      "type": "number"
+                    },
+                    "p95": {
+                      "type": "number"
+                    },
+                    "p99": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "intents": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "KbInfoResponse": {
+        "type": "object",
+        "properties": {
+          "kb_version": {
+            "type": "string"
+          },
+          "built_at": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "listings": {
+                "type": "integer"
+              },
+              "products": {
+                "type": "integer"
+              },
+              "sellers": {
+                "type": "integer"
+              }
+            }
+          },
+          "price_note": {
+            "type": "string"
+          },
+          "intent_classifier": {
+            "type": "object",
+            "properties": {
+              "training_examples": {
+                "type": "integer"
+              },
+              "intents": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "thresholds": {
+            "type": "object",
+            "properties": {
+              "fallback": {
+                "type": "number"
+              },
+              "high_confidence": {
+                "type": "number"
+              }
+            }
+          },
+          "session_ttl_sec": {
+            "type": "integer"
+          },
+          "log_retention_days": {
+            "type": "integer"
+          }
+        }
+      },
+      "LogRecord": {
+        "type": "object",
+        "properties": {
+          "ts": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "latency_ms": {
+            "type": "number"
+          },
+          "session_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "description": "ข้อความผู้ใช้ (ปิดบังเบอร์/อีเมลแล้ว)"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "is_fallback": {
+            "type": "boolean"
+          },
+          "response": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ChatStatsResponse": {
+        "type": "object",
+        "properties": {
+          "total_questions": {
+            "type": "integer"
+          },
+          "listings": {
+            "type": "integer"
+          },
+          "products": {
+            "type": "integer"
+          },
+          "intent_categories": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "SampleQuestionsResponse": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string"
+                },
+                "intent_category": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

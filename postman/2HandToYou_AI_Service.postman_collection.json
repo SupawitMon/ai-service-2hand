@@ -1,0 +1,1028 @@
+{
+  "info": {
+    "_postman_id": "f1e23ef7-fb4a-4945-9f2a-3b0f2a89ba5a",
+    "name": "2HandToYou AI Service (API Gateway :8012)",
+    "description": "API ของทีม AI: ประเมินราคา + แชทบอท (ตรงกับเอกสาร API Spec openapi.yaml)\n\n## URL ที่ใช้ (เส้นเดียว)\nทุก request เรียกผ่าน **API Gateway พอร์ต 8012** ผ่านตัวแปร `{{base_url}}` ซึ่งฝังอยู่ใน collection แล้ว ไม่ต้อง import environment\n\n| ค่า | ใช้เมื่อ |\n|---|---|\n| `http://localhost:8012` (ค่าเริ่มต้น) | รัน Postman บนเครื่องเดียวกับที่ติดตั้งระบบ |\n| `http://<IP เซิร์ฟเวอร์>:8012` | ทดสอบจากเครื่องอื่น |\n\nวิธีเปลี่ยน: คลิกชื่อ collection → แท็บ **Variables** → แก้ช่อง Current value ของ `base_url` → **Save**\n\n## วิธีรัน\nกด Send ทีละ request หรือคลิกขวาที่ collection → **Run collection** (ทุก request มี test ตรวจผลอัตโนมัติ)\n\n- \"ทายเกรดจากรูป\" ต้องเลือกไฟล์รูปเองก่อน (Body → form-data → image) ถ้าไม่เลือก test ข้อนั้นจะถูกข้าม\n- \"ดู log ของ request_id\" ต้องใส่ `admin_token` ใน Variables ให้ตรงกับ `LOG_ACCESS_TOKEN` ในไฟล์ .env (ไม่ใส่จะได้ 403)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// สร้าง session_id ให้อัตโนมัติถ้ายังไม่มี (ใช้ร่วมกันทุกคำถามในรอบเดียวกัน)",
+          "if (!pm.collectionVariables.get('session_id')) pm.collectionVariables.set('session_id', 'postman-' + Date.now());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// เก็บ request_id ล่าสุดไว้ใช้กับ 'ดู log ของ request_id'",
+          "const rid = pm.response.headers.get('X-Request-ID'); if (rid) pm.collectionVariables.set('last_request_id', rid);"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8012",
+      "type": "string",
+      "description": "API Gateway พอร์ต 8012 — แก้เป็น http://<IP เซิร์ฟเวอร์>:8012 ถ้าทดสอบจากเครื่องอื่น"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string",
+      "description": "ค่าเดียวกับ LOG_ACCESS_TOKEN ในไฟล์ .env"
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "last_request_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. AI ประเมินราคา",
+      "description": "ทายเกรดจากรูป (YOLO) + ประเมินราคา (XGBoost)",
+      "item": [
+        {
+          "name": "รายชื่อยี่ห้อ/รุ่น",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/options",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "options"
+              ]
+            },
+            "description": "ใช้ทำ dropdown ยี่ห้อ/รุ่น — `brands` (list) และ `brand_models` ({ยี่ห้อ: [รุ่น]})"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"มีรายชื่อยี่ห้อ\", () => pm.expect(pm.response.json().brands.length).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ทายเกรดจากรูป",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/predict-grade",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "predict-grade"
+              ]
+            },
+            "description": "**ต้องเลือกไฟล์รูปเองก่อนกด Send** (Body → form-data → key `image`)\n\nได้ `grade` (A/B/C) และ `confidence`",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "description": "เลือกไฟล์รูปสินค้า (jpg/png) ในแท็บ Body"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const img = pm.request.body && pm.request.body.formdata && pm.request.body.formdata.get(\"image\");",
+                  "if (!img || !img.src || (pm.response.code === 400 && /image|รูป/i.test(pm.response.text()))) {",
+                  "  pm.test.skip(\"ยังไม่ได้เลือกไฟล์รูป (Body → form-data → image) — ข้ามการทดสอบนี้\", () => {});",
+                  "} else {",
+                  "  pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "  pm.test(\"ได้เกรด A/B/C\", () => pm.expect([\"A\",\"B\",\"C\"]).to.include(pm.response.json().grade));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ประเมินราคา",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/predict-price",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "predict-price"
+              ]
+            },
+            "description": "`grade`: A / B / C · `accessories`: full / partial / none · `year` ไม่บังคับ\n\nได้ช่วงราคา (`recommended_min`, `recommended_max`), ราคาแนะนำ `expected_price` และ `factors` ปัจจัยที่มีผลต่อราคา (บาท +/−)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"Apple\",\n  \"model\": \"iPhone 13\",\n  \"grade\": \"B\",\n  \"accessories\": \"full\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"มีช่วงราคา + ปัจจัย\", () => { const j = pm.response.json(); pm.expect(j.factors).to.be.an(\"array\"); pm.expect(j.recommended_max).to.be.at.least(j.recommended_min); pm.expect(j.expected_price).to.be.within(j.recommended_min, j.recommended_max); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ประเมินราคา — พิมพ์ชื่อรุ่นไม่ครบ (ได้รุ่นใกล้เคียง)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/predict-price",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "predict-price"
+              ]
+            },
+            "description": "ตัวอย่าง error 404: ระบบตอบ `suggestions` รุ่นที่ใกล้เคียงกลับมา",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"Apple\",\n  \"model\": \"iphone\",\n  \"grade\": \"B\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 + suggestions\", () => { pm.response.to.have.status(404); pm.expect(pm.response.json().suggestions.length).to.be.above(0); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. แชทบอทถาม-ตอบ",
+      "description": "รันตามลำดับ (ข้อ 1–3 ใช้ session เดียวกัน เพื่อทดสอบการจำบริบท)",
+      "item": [
+        {
+          "name": "ถามราคา (เริ่มบทสนทนา)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "ส่ง `session_id` เดิมทุกคำถามในบทสนทนาเดียวกัน บอทจะจำว่าคุยเรื่องอะไรอยู่\n\nresponse สำคัญ: `response`, `intent`, `confidence`, `is_fallback`, `source.ids` (แหล่งข้อมูล), `request_id`",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"iPhone 13 ราคาเท่าไหร่\",\n  \"session_id\": \"{{session_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"มี request_id ตรงกับ header\", () => { const j = pm.response.json(); pm.expect(j.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });",
+                  "pm.test(\"intent = price\", () => pm.expect(pm.response.json().intent).to.eql(\"price\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ถามต่อ: สภาพ (ใช้บริบทเดิม)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "ไม่ได้พิมพ์ชื่อรุ่น แต่บอทรู้ว่ายังพูดถึง iPhone 13 ดูได้ที่ `context_used`",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"แล้วสภาพเป็นไงบ้าง\",\n  \"session_id\": \"{{session_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"ใช้บริบท iPhone 13\", () => pm.expect(pm.response.json().context_used.product).to.eql(\"Apple iPhone 13\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ถามต่อ: เทียบราคาตลาด",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"ถูกกว่าราคาตลาดไหม\",\n  \"session_id\": \"{{session_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ผู้ขายน่าเชื่อถือไหม",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"ผู้ขาย S00005 น่าเชื่อถือไหม\",\n  \"session_id\": \"{{session_id}}-seller\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"intent = seller_reputation\", () => pm.expect(pm.response.json().intent).to.eql(\"seller_reputation\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ค้นหาตามงบ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"หามือถืองบไม่เกิน 8000\",\n  \"session_id\": \"{{session_id}}-search\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ภาษาอังกฤษ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"How much is the Nintendo Switch OLED?\",\n  \"session_id\": \"{{session_id}}-en\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fallback: รุ่นที่ไม่มีในระบบ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "`is_fallback: true`, `fallback_reason: unknown_product` + `suggestions` รุ่นใกล้เคียง",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"iPhone 16 Pro Max ราคาเท่าไหร่\",\n  \"session_id\": \"{{session_id}}-fb1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"fallback unknown_product\", () => { const j = pm.response.json(); pm.expect(j.is_fallback).to.be.true; pm.expect(j.fallback_reason).to.eql(\"unknown_product\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fallback: ไม่ระบุรุ่น",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "session ใหม่ ไม่มีบริบท → ถามกลับว่าหมายถึงรุ่นไหน (`need_product`)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"ราคาเท่าไหร่\",\n  \"session_id\": \"{{session_id}}-fb2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"fallback need_product\", () => pm.expect(pm.response.json().fallback_reason).to.eql(\"need_product\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fallback: นอกเรื่อง",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"สูตรต้มยำกุ้ง\",\n  \"session_id\": \"{{session_id}}-fb3\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"is_fallback\", () => pm.expect(pm.response.json().is_fallback).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PDPA: ขอเบอร์ผู้ขาย (ต้องปฏิเสธ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"ขอเบอร์ผู้ขาย S00005\",\n  \"session_id\": \"{{session_id}}-pii\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"intent = pii\", () => pm.expect(pm.response.json().intent).to.eql(\"pii\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. แชทบอทเจรจา (intent)",
+      "description": "หน้าเว็บเจรจาเรียก endpoint นี้เพื่อจำแนกข้อความ\n\n`action`: offer · spec · trust · market · pii · other_product · unknown_product · greeting · farewell · other",
+      "item": [
+        {
+          "name": "เสนอราคา",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/negotiate/intent",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "negotiate",
+                "intent"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"ขอเหลือหมื่นห้าได้ไหม\",\n  \"current_product\": \"Sony PlayStation 5\",\n  \"session_id\": \"{{session_id}}-nego\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"offer 15000\", () => { const j = pm.response.json(); pm.expect(j.action).to.eql(\"offer\"); pm.expect(j.price).to.eql(15000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ถามสภาพเครื่อง",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/negotiate/intent",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "negotiate",
+                "intent"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"เครื่องมีรอยไหมครับ\",\n  \"current_product\": \"Sony PlayStation 5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"action = spec\", () => pm.expect(pm.response.json().action).to.eql(\"spec\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ถามรุ่นอื่น (พิมพ์ผิด)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "ไม่ส่งก็ได้ ระบบสร้างให้ ใช้ตามหา log ย้อนหลัง"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/negotiate/intent",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "negotiate",
+                "intent"
+              ]
+            },
+            "description": "พิมพ์ผิด \"ipone\" ระบบแก้เป็น iPhone 14 ให้",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"ขอรายละเอียด ipone 14\",\n  \"current_product\": \"Sony PlayStation 5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"other_product = iPhone 14\", () => { const j = pm.response.json(); pm.expect(j.action).to.eql(\"other_product\"); pm.expect(j.product_mention).to.eql(\"Apple iPhone 14\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Ops / ตรวจสอบระบบ",
+      "item": [
+        {
+          "name": "Metrics (latency P95, fallback rate)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "metrics"
+              ]
+            },
+            "description": "นับตั้งแต่ server start: จำนวน request, latency P50/P95/P99, อัตรา fallback, สัดส่วน intent"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "KB info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/kb/info",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "kb",
+                "info"
+              ]
+            },
+            "description": "เวอร์ชัน Knowledge Base, threshold, จำนวนข้อมูลเทรน"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ดู log ของ request_id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{admin_token}}",
+                "description": "ต้องตรงกับ LOG_ACCESS_TOKEN ในไฟล์ .env บนเซิร์ฟเวอร์"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/logs/{{last_request_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "logs",
+                "{{last_request_id}}"
+              ]
+            },
+            "description": "ต้องตั้ง `admin_token` ใน environment ให้ตรงกับ `LOG_ACCESS_TOKEN` บนเซิร์ฟเวอร์ (ถ้าไม่ได้ตั้ง จะได้ 403)\n\n`last_request_id` ถูกเก็บอัตโนมัติจาก request แชทล่าสุด"
+          }
+        },
+        {
+          "name": "สถิติ dataset",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/chat/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat",
+                "stats"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ตัวอย่างคำถาม",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/chat/sample-questions?n=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat",
+                "sample-questions"
+              ],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -15,7 +15,7 @@
       "description": "API Gateway (nginx) — ใช้ตัวนี้เป็นหลัก ทุก endpoint ผ่านพอร์ตนี้ได้",
       "variables": {
         "host": {
-          "default": "localhost",
+          "default": "10.80.35.5",
           "description": "IP หรือชื่อโดเมนของเซิร์ฟเวอร์"
         }
       }
@@ -25,7 +25,7 @@
       "description": "ChatBot Service โดยตรง (เฉพาะ endpoint หมวด Chat / Negotiation / Ops)",
       "variables": {
         "host": {
-          "default": "localhost"
+          "default": "10.80.35.5"
         }
       }
     }

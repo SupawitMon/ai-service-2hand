@@ -27,13 +27,13 @@ servers:
     description: API Gateway (nginx) — ใช้ตัวนี้เป็นหลัก ทุก endpoint ผ่านพอร์ตนี้ได้
     variables:
       host:
-        default: localhost
+        default: 10.80.35.5
         description: IP หรือชื่อโดเมนของเซิร์ฟเวอร์
   - url: http://{host}:8013
     description: ChatBot Service โดยตรง (เฉพาะ endpoint หมวด Chat / Negotiation / Ops)
     variables:
       host:
-        default: localhost
+        default: 10.80.35.5
 tags:
   - name: Price — Product
     description: ข้อมูลยี่ห้อ/รุ่นสินค้าที่ระบบประเมินราคาได้

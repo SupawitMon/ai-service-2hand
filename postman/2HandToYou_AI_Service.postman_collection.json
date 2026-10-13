@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "f1e23ef7-fb4a-4945-9f2a-3b0f2a89ba5a",
     "name": "2HandToYou AI Service (API Gateway :8012)",
-    "description": "API ของทีม AI: ประเมินราคา + แชทบอท (ตรงกับเอกสาร API Spec openapi.yaml)\n\n## URL ที่ใช้ (เส้นเดียว)\nทุก request เรียกผ่าน **API Gateway พอร์ต 8012** ผ่านตัวแปร `{{base_url}}` ซึ่งฝังอยู่ใน collection แล้ว ไม่ต้อง import environment\n\n| ค่า | ใช้เมื่อ |\n|---|---|\n| `http://localhost:8012` (ค่าเริ่มต้น) | รัน Postman บนเครื่องเดียวกับที่ติดตั้งระบบ |\n| `http://<IP เซิร์ฟเวอร์>:8012` | ทดสอบจากเครื่องอื่น |\n\nวิธีเปลี่ยน: คลิกชื่อ collection → แท็บ **Variables** → แก้ช่อง Current value ของ `base_url` → **Save**\n\n## วิธีรัน\nกด Send ทีละ request หรือคลิกขวาที่ collection → **Run collection** (ทุก request มี test ตรวจผลอัตโนมัติ)\n\n- \"ทายเกรดจากรูป\" ต้องเลือกไฟล์รูปเองก่อน (Body → form-data → image) ถ้าไม่เลือก test ข้อนั้นจะถูกข้าม\n- \"ดู log ของ request_id\" ต้องใส่ `admin_token` ใน Variables ให้ตรงกับ `LOG_ACCESS_TOKEN` ในไฟล์ .env (ไม่ใส่จะได้ 403)",
+    "description": "API ของทีม AI: ประเมินราคา + แชทบอท (ตรงกับเอกสาร API Spec openapi.yaml)\n\n## URL ที่ใช้ (เส้นเดียว)\nทุก request เรียกผ่าน **API Gateway พอร์ต 8012** ผ่านตัวแปร `{{base_url}}` ซึ่งฝังอยู่ใน collection แล้ว ไม่ต้อง import environment\n\n| ค่า | ใช้เมื่อ |\n|---|---|\n| `http://10.80.35.5:8012` (ค่าเริ่มต้น) | เซิร์ฟเวอร์จริงของโครงการ ใช้ได้ทันทีจากเครื่องในเครือข่ายมหาวิทยาลัย |\n| `http://localhost:8012` | รัน Postman บนเครื่องที่ติดตั้งระบบเอง |\n| `http://<IP เครื่องอื่น>:8012` | ติดตั้งระบบบนเครื่องอื่นตามคู่มือ |\n\nวิธีเปลี่ยน: คลิกชื่อ collection → แท็บ **Variables** → แก้ช่อง Value ของ `base_url` → **Save**\n\n## วิธีรัน\nกด Send ทีละ request หรือคลิกขวาที่ collection → **Run collection** (ทุก request มี test ตรวจผลอัตโนมัติ)\n\n- \"ทายเกรดจากรูป\" ต้องเลือกไฟล์รูปเองก่อน (Body → form-data → image) ถ้าไม่เลือก test ข้อนั้นจะถูกข้าม\n- \"ดู log ของ request_id\" ต้องใส่ `admin_token` ใน Variables ให้ตรงกับ `LOG_ACCESS_TOKEN` ในไฟล์ .env (ไม่ใส่จะได้ 403)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -30,9 +30,9 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8012",
+      "value": "http://10.80.35.5:8012",
       "type": "string",
-      "description": "API Gateway พอร์ต 8012 — แก้เป็น http://<IP เซิร์ฟเวอร์>:8012 ถ้าทดสอบจากเครื่องอื่น"
+      "description": "API Gateway พอร์ต 8012 ของเซิร์ฟเวอร์โครงการ (http://10.80.35.5:8012) — ถ้าติดตั้งระบบบนเครื่องอื่น แก้เป็น http://<IP เครื่องนั้น>:8012"
     },
     {
       "key": "admin_token",
